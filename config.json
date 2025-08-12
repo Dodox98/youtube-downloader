@@ -1,1 +1,5 @@
-
+{
+  "default_download_path": "C:\\Users\\lukyh\\Music\\MP3\\mp3",
+  "theme": "dark",
+  "aria2_enabled": true
+}
