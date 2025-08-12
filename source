@@ -1,0 +1,129 @@
+import customtkinter as ctk
+from tkinter import filedialog
+from yt_dlp import YoutubeDL
+import threading
+
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+class YoutubeDownloaderApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("YouTube Downloader s aria2c")
+        self.geometry("650x400")
+        self.resizable(False, False)
+
+        self.download_path = r"C:\Users\lukyh\Music\MP3\mp3"
+
+        # Hlavní rámec
+        main_frame = ctk.CTkFrame(self, corner_radius=15)
+        main_frame.pack(padx=20, pady=20, fill="both", expand=True)
+
+        # Název
+        title_label = ctk.CTkLabel(main_frame, text="YouTube Downloader", font=ctk.CTkFont(size=24, weight="bold"))
+        title_label.pack(pady=(0,20))
+
+        # URL vstup
+        url_frame = ctk.CTkFrame(main_frame)
+        url_frame.pack(fill="x", padx=10)
+
+        url_label = ctk.CTkLabel(url_frame, text="Vlož URL videa:")
+        url_label.pack(side="left", padx=(10,5))
+
+        self.url_entry = ctk.CTkEntry(url_frame, placeholder_text="https://www.youtube.com/...", width=450)
+        self.url_entry.pack(side="left", padx=5, pady=10)
+
+        # Výběr složky
+        folder_frame = ctk.CTkFrame(main_frame)
+        folder_frame.pack(fill="x", padx=10, pady=(10,0))
+
+        self.label_path = ctk.CTkLabel(folder_frame, text=f"Cílová složka: {self.download_path}", anchor="w")
+        self.label_path.pack(side="left", padx=10)
+
+        btn_browse = ctk.CTkButton(folder_frame, text="Změnit složku", width=130, command=self.browse_folder)
+        btn_browse.pack(side="right", padx=10)
+
+        # Progres bar + procenta
+        progress_frame = ctk.CTkFrame(main_frame)
+        progress_frame.pack(fill="x", padx=10, pady=20)
+
+        self.progress = ctk.CTkProgressBar(progress_frame, width=450)
+        self.progress.set(0)
+        self.progress.pack(side="left", padx=(10,5), pady=5)
+
+        self.progress_label = ctk.CTkLabel(progress_frame, text="0 %", width=50)
+        self.progress_label.pack(side="left", padx=(5,10))
+
+        # Status zpráva
+        self.status_label = ctk.CTkLabel(main_frame, text="", font=ctk.CTkFont(size=14), text_color="lightgray")
+        self.status_label.pack(pady=(0,10))
+
+        # Tlačítko stahovat
+        self.download_button = ctk.CTkButton(main_frame, text="Stáhnout", width=200, height=45, command=self.start_download_thread)
+        self.download_button.pack(pady=10)
+
+    def browse_folder(self):
+        folder_selected = filedialog.askdirectory(initialdir=self.download_path)
+        if folder_selected:
+            self.download_path = folder_selected
+            self.label_path.configure(text=f"Cílová složka: {self.download_path}")
+
+    def start_download_thread(self):
+        thread = threading.Thread(target=self.download_video)
+        thread.start()
+
+    def download_video(self):
+        url = self.url_entry.get().strip()
+        if not url:
+            self.update_status("Zadej platnou URL.")
+            return
+
+        self.update_status("Stahování spuštěno...")
+        self.progress.set(0)
+        self.progress_label.configure(text="0 %")
+        self.download_button.configure(state="disabled")
+
+        ydl_opts = {
+            'outtmpl': self.download_path + r'\%(title)s.%(ext)s',
+            'format': 'bestaudio/best',
+            'external_downloader': 'aria2c',
+            'external_downloader_args': ['-x', '16', '-k', '1M'],
+            'progress_hooks': [self.progress_hook],
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+        }
+
+        try:
+            with YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            self.update_status("Stahování dokončeno!")
+            self.progress.set(1)
+            self.progress_label.configure(text="100 %")
+        except Exception as e:
+            self.update_status(f"Chyba: {str(e)}")
+            self.progress.set(0)
+            self.progress_label.configure(text="0 %")
+        finally:
+            self.download_button.configure(state="normal")
+
+    def progress_hook(self, d):
+        if d['status'] == 'downloading':
+            total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate')
+            downloaded_bytes = d.get('downloaded_bytes', 0)
+            if total_bytes:
+                progress = downloaded_bytes / total_bytes
+                percent = int(progress * 100)
+                self.progress.set(progress)
+                self.progress_label.configure(text=f"{percent} %")
+        elif d['status'] == 'finished':
+            self.update_status("Zpracovávám video...")
+
+    def update_status(self, message):
+        self.status_label.configure(text=message)
+
+if __name__ == "__main__":
+    app = YoutubeDownloaderApp()
+    app.mainloop()
